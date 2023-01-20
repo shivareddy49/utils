@@ -1,0 +1,781 @@
+package utils;
+
+import java.util.List;
+
+public interface IRestDriver {
+
+
+    void setRestRequest(RestRequest v1);
+
+    IRestResponse getRestResponse();
+
+    RestRequest getRestRequest();
+
+    void setExpectedStatus(Integer v1);
+
+    void addExpectedStatus(Integer v1);
+
+    void setExpectedStatuses(List<Integer> var1);
+
+    void execute();
+
+
+}
+ ///////////////////////////////////////////////////////////////////////////////
+ 
+ 
+ package utils;
+
+import io.restassured.http.ContentType;
+
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+
+public interface IRestRequest {
+
+    int getConnectionTimeOut();
+
+    void setConnectionTimeout(int v1);
+
+    long getRequestInitTime();
+
+    void setBody(String v1);
+
+    String getBody();
+
+    void setRequestType(RestType v1);
+
+    RestType getRequestType();
+
+    void setBaseUri(String v1);
+
+    String getBaseUri();
+
+    void setBasePath(String v1);
+
+    String getBasePath();
+
+    void setPathParameter(String v1,String v2);
+
+    void setPathParamters(HashMap<String , String> v1);
+
+    Map<String , String> getPathParamters();
+
+    void setQueryParamter(String v1 , String v2);
+
+    void setQueryParameters(HashMap<String , String> v1);
+
+    Map<String , String> getQueryParamters();
+
+
+    void setHeaderParamter(String v1 , String v2);
+
+    void setHeaderParamter(HashMap<String , String> v1);
+
+    Map<String , String> getHeaderParamters();
+
+    String getContentType();
+
+    void setContentType(ContentType v1);
+
+    void setMultipartFile(File v1);
+
+    boolean isUrlEncodingEnabled(boolean v1);
+
+    Map<String , String> getFormParams();
+
+    void setFormParams(HashMap<String , String > v1);
+
+    void report();
+
+
+
+
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+package utils;
+
+import java.util.HashMap;
+
+public interface IRestResponse {
+
+    String getBody();
+
+    String getHeader(String v1);
+
+    HashMap<String , String> getHeadersAsHashMap();
+
+    int getStatusCode();
+    long getDuration();
+    void report();
+
+}
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+package utils;
+
+import org.testng.Assert;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class RestDriver implements IRestDriver {
+
+    private List<Integer> expectedStatus = new ArrayList();
+    private RestRequest restRequest;
+    private RestResponse restResponse;
+
+    public RestDriver(RestRequest restRequest) {
+
+        Assert.assertNotNull(restRequest, "restRequest");
+        this.restRequest = restRequest;
+
+    }
+
+
+    @Override
+    public void setRestRequest(RestRequest v1) {
+
+        Assert.assertNotNull(restRequest, "restRequest");
+        this.restRequest = restRequest;
+    }
+
+    @Override
+    public IRestResponse getRestResponse() {
+
+        Assert.assertNotNull(this.restResponse, "restResponse");
+        return this.restResponse;
+    }
+
+    @Override
+    public RestRequest getRestRequest() {
+
+        Assert.assertNotNull(this.restResponse,"restRequest");
+        return this.restRequest;
+    }
+
+    @Override
+    public void setExpectedStatus(Integer expectedStatus) {
+    this.expectedStatus.clear();
+    this.expectedStatus.add(expectedStatus);
+    }
+
+    @Override
+    public void addExpectedStatus(Integer expectedStatus) {
+    this.expectedStatus.add(expectedStatus);
+    }
+
+    @Override
+    public void setExpectedStatuses(List<Integer> var1) {
+        this.expectedStatus =expectedStatus;
+
+    }
+
+    @Override
+    public void execute() {
+
+        CustomSoftAssert customsoftAssert = new CustomSoftAssert();
+        Assert.assertNotNull(this.restRequest, "restRequest");
+        this.restResponse = this.restRequest.getResponse();
+        RestDriverHistory.addRestDriver(this);
+        customsoftAssert.assertStatusCode(this.expectedStatus,String.valueOf(this.restResponse.getStatusCode()));
+
+
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+package utils;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.logging.Logger;
+
+
+public class RestDriverHistory {
+
+
+    private static final Logger LOGGER = Logger.getLogger(String.valueOf(RestDriverHistory.class));
+    private static List<RestDriver> restDriverList = Collections.synchronizedList(new ArrayList());
+
+    public RestDriverHistory(){
+
+    }
+
+    protected  static void addRestDriver(RestDriver restDriver){
+        LOGGER.info("addRestDriver");
+        restDriverList.add(restDriver);
+    }
+
+    public  static List<RestDriver> getRestDriverHistory(){
+
+        LOGGER.info("getRestDriverHistory. total records: " + String.valueOf(restDriverList.size()) );
+        return restDriverList;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+package utils;
+
+import io.restassured.RestAssured;
+import io.restassured.config.EncoderConfig;
+import io.restassured.config.HttpClientConfig;
+import io.restassured.config.LogConfig;
+import io.restassured.config.RestAssuredConfig;
+import io.restassured.http.ContentType;
+import io.restassured.http.Header;
+import io.restassured.http.Headers;
+import io.restassured.response.Response;
+import io.restassured.specification.QueryableRequestSpecification;
+import io.restassured.specification.RequestSpecification;
+import io.restassured.specification.SpecificationQuerier;
+import org.testng.Assert;
+
+import java.io.File;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.logging.Logger;
+
+public class RestRequest implements IRestRequest {
+
+    private static final Logger LOGGER = Logger.getLogger(RestRequest.class.getName());
+    private RestType requestType;
+    private boolean urlEncodingEnabled = true;
+    private RequestSpecification requestSpecification;
+    private int connectionTimeout = 120000;
+    private long requestInitTime = 0L;
+
+    public RestRequest(RestType requestType) {
+        this.requestType = requestType;
+        this.requestInitTime = (new Date()).getTime();
+        RestAssured.useRelaxedHTTPSValidation();
+        LogConfig logConfig = LogConfig.logConfig().enablePrettyPrinting(true);
+        EncoderConfig encoderConfig = EncoderConfig.encoderConfig().appendDefaultContentCharsetToContentTypeIfUndefined(false);
+        HttpClientConfig httpClientConfig = HttpClientConfig.httpClientConfig().setParam("http.connection.timeout", this.connectionTimeout).setParam("http.socket.timeout", this.connectionTimeout);
+        RestAssuredConfig restAssuredConfig = RestAssured.config().logConfig(logConfig).encoderConfig(encoderConfig).httpClient(httpClientConfig);
+        this.requestSpecification = RestAssured.given().config(restAssuredConfig);
+    }
+
+
+
+    @Override
+    public int getConnectionTimeOut() {
+        return this.connectionTimeout;
+    }
+
+    public void setConnectionTimeout(int connectionTimeout) {
+        this.connectionTimeout = connectionTimeout;
+    }
+
+    public long getRequestInitTime() {
+        return this.requestInitTime;
+    }
+
+    public void setBody(String body) {
+        if (body != null) {
+            this.requestSpecification.body(body);
+        }
+
+    }
+
+    public String getBody() {
+        return (String)SpecificationQuerier.query(this.requestSpecification).getBody();
+    }
+
+    public void setRequestType(RestType requestType) {
+        this.requestType = requestType;
+    }
+
+    public RestType getRequestType() {
+        return this.requestType;
+    }
+
+    public void setBaseUri(String baseUri) {
+        this.requestSpecification.baseUri(baseUri);
+    }
+
+    public String getBaseUri() {
+        return SpecificationQuerier.query(this.requestSpecification).getBaseUri();
+    }
+
+    public void setBasePath(String basePath) {
+        this.requestSpecification.basePath(basePath);
+    }
+
+    public String getBasePath() {
+        return SpecificationQuerier.query(this.requestSpecification).getBasePath();
+    }
+
+    public void setPort(int port) {
+        this.requestSpecification.port(port);
+    }
+
+    public int getPort() {
+        return SpecificationQuerier.query(this.requestSpecification).getPort();
+    }
+
+    public void setPathParameter(String key, String value) {
+        if (value != null) {
+            this.requestSpecification.pathParam(key, value);
+        }
+
+    }
+
+    @Override
+    public void setPathParamters(HashMap<String, String> v1) {
+
+    }
+
+    @Override
+    public Map<String, String> getPathParamters() {
+        return null;
+    }
+
+    @Override
+    public void setQueryParamter(String v1, String v2) {
+
+    }
+
+    public void setPathParameters(HashMap<String, String> pathParameters) {
+        if (pathParameters != null) {
+            Iterator var2 = pathParameters.keySet().iterator();
+
+            while(var2.hasNext()) {
+                String key = (String)var2.next();
+                this.setPathParameter(key, (String)pathParameters.get(key));
+            }
+        }
+
+    }
+
+    public Map<String, String> getPathParameters() {
+        return SpecificationQuerier.query(this.requestSpecification).getPathParams();
+    }
+
+    public void setQueryParameter(String key, String value) {
+        if (value != null) {
+            this.requestSpecification.queryParam(key, new Object[]{value});
+        }
+
+    }
+
+    public void setQueryParameters(HashMap<String, String> queryParameters) {
+        if (queryParameters != null) {
+            Iterator var2 = queryParameters.keySet().iterator();
+
+            while(var2.hasNext()) {
+                String key = (String)var2.next();
+                this.setQueryParameter(key, (String)queryParameters.get(key));
+            }
+        }
+
+    }
+
+    @Override
+    public Map<String, String> getQueryParamters() {
+        return null;
+    }
+
+    @Override
+    public void setHeaderParamter(String v1, String v2) {
+
+    }
+
+    @Override
+    public void setHeaderParamter(HashMap<String, String> v1) {
+
+    }
+
+    @Override
+    public Map<String, String> getHeaderParamters() {
+        return null;
+    }
+
+    public Map<String, String> getQueryParameters() {
+        return SpecificationQuerier.query(this.requestSpecification).getQueryParams();
+    }
+
+    public void setHeaderParameter(String key, String value) {
+        if (key != null && value != null) {
+            this.requestSpecification.header(new Header(key, value));
+        }
+
+    }
+
+    public void setHeaderParameters(HashMap<String, String> headerParameters) {
+        if (headerParameters != null) {
+            Iterator var2 = headerParameters.keySet().iterator();
+
+            while(var2.hasNext()) {
+                String key = (String)var2.next();
+                String value = (String)headerParameters.get(key);
+                this.setHeaderParameter(key, value);
+            }
+        }
+
+    }
+
+    public Map<String, String> getHeaderParameters() {
+        Headers headers = SpecificationQuerier.query(this.requestSpecification).getHeaders();
+        Map<String, String> headersMap = new HashMap();
+        Iterator var3 = headers.iterator();
+
+        while(var3.hasNext()) {
+            Header header = (Header)var3.next();
+            headersMap.put(header.getName(), header.getValue());
+        }
+
+        return headersMap;
+    }
+
+    public String getHeaderParameterValue(String headerName) {
+        return SpecificationQuerier.query(this.requestSpecification).getHeaders().get(headerName).getValue();
+    }
+
+    public void setProxy(String proxyHost, int proxyPort) {
+        if (proxyHost != null && !proxyHost.isEmpty() && proxyPort != 0) {
+            this.requestSpecification.proxy(proxyHost, proxyPort);
+        }
+
+    }
+
+    public String getContentType() {
+        return SpecificationQuerier.query(this.requestSpecification).getContentType();
+    }
+
+    public void setContentType(ContentType contentType) {
+        if (contentType != null) {
+            this.requestSpecification.contentType(contentType);
+        }
+
+    }
+
+    @Override
+    public void setMultipartFile(File v1) {
+
+    }
+
+    @Override
+    public boolean isUrlEncodingEnabled(boolean v1) {
+        return false;
+    }
+
+    public void setMultiPartFile(File multiPartFile) {
+        if (multiPartFile != null) {
+            this.requestSpecification.multiPart("file", multiPartFile);
+        }
+
+    }
+
+    public boolean isUrlEncodingEnabled() {
+        return this.urlEncodingEnabled;
+    }
+
+    public void setUrlEncodingEnabled(boolean urlEncodingEnabled) {
+        this.requestSpecification.urlEncodingEnabled(urlEncodingEnabled);
+    }
+
+    public Map<String, String> getFormParams() {
+        return SpecificationQuerier.query(this.requestSpecification).getFormParams();
+    }
+
+    public void setFormParams(HashMap<String, String> formParams) {
+        if (formParams != null && !formParams.isEmpty()) {
+            this.requestSpecification.formParams(formParams);
+        }
+
+    }
+
+    protected RestResponse getResponse() {
+        this.report();
+        switch(this.requestType) {
+            case GET:
+                return new RestResponse((Response)this.requestSpecification.when().get());
+            case POST:
+                return new RestResponse((Response)this.requestSpecification.when().post());
+            case PATCH:
+                return new RestResponse((Response)this.requestSpecification.when().patch());
+            case DELETE:
+                return new RestResponse((Response)this.requestSpecification.when().delete());
+            case PUT:
+                return new RestResponse((Response)this.requestSpecification.when().put());
+            default:
+                return new RestResponse((Response)this.requestSpecification.when().get());
+        }
+    }
+
+    public void report() {
+        QueryableRequestSpecification queryable = SpecificationQuerier.query(this.requestSpecification);
+        Assert.assertNotNull(queryable, "queryable");
+        String bodyToReport = "";
+        if (queryable.getBody() != null && queryable.getBody() != "") {
+            bodyToReport = queryable.getBody().toString().replace(System.lineSeparator(), "");
+        }
+
+        String urlToReport = queryable.getBaseUri() + queryable.getDerivedPath();
+        if (queryable.getQueryParams() != null && !queryable.getQueryParams().isEmpty()) {
+            urlToReport = urlToReport + "?";
+            Iterator entries = queryable.getQueryParams().entrySet().iterator();
+
+            while(entries.hasNext()) {
+                Map.Entry<String, String> entry = (Map.Entry)entries.next();
+                if (entries.hasNext()) {
+                    urlToReport = urlToReport + (String)entry.getKey() + "=" + (String)entry.getValue() + "&";
+                } else {
+                    urlToReport = urlToReport + (String)entry.getKey() + "=" + (String)entry.getValue();
+                }
+            }
+        }
+
+        LOGGER.info(this.requestType.toString() + " " + urlToReport + System.lineSeparator() + "Headers: " + queryable.getHeaders() + System.lineSeparator() + "Form: " + queryable.getFormParams() + System.lineSeparator() + "Payload: " + bodyToReport);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+
+
+package utils;
+
+import io.restassured.http.Cookie;
+import io.restassured.http.Header;
+import io.restassured.http.Headers;
+import io.restassured.response.Response;
+import org.testng.Assert;
+import utils.IRestResponse;
+import utils.RestRequest;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
+
+public class RestResponse implements IRestResponse {
+
+    private static final Logger LOGGER = Logger.getLogger(RestRequest.class.getName());
+
+    private Response response;
+    public RestResponse(Response response)
+    {
+        this.response = response;
+        this.report();
+    }
+
+    @Override
+    public String getBody() {
+        return this.response.asString();
+    }
+
+    @Override
+    public String getHeader(String headerName) {
+        return this.response.getHeader(headerName);
+    }
+
+    @Override
+    public HashMap<String, String> getHeadersAsHashMap() {
+        HashMap<String , String> headersMap = new HashMap();
+        Headers headers = this.response.getHeaders();
+        Iterator v3 = headers.iterator();
+        while(v3.hasNext()){
+            Header header = (Header)v3.next();
+            headersMap.put(header.getName(),header.getValue());
+        }
+
+        return headersMap;
+    }
+
+    public String getDetailedCookieValue(String cookieName){
+        Cookie cokie = this.response.getDetailedCookie(cookieName);
+        return cokie.getValue();
+    }
+
+    @Override
+    public int getStatusCode() {
+        return this.response.getStatusCode();
+    }
+
+    @Override
+    public long getDuration() {
+        return this.response.getTimeIn(TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public void report() {
+
+        Assert.assertNotNull(this.response,"response");
+        LOGGER.info(String.valueOf(this.getStatusCode() + System.lineSeparator() + "Headers: " + this.getHeadersAsHashMap() + System.lineSeparator() +
+                 "Body: "+ this.getBody()));
+
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+
+package utils;
+
+public enum RestType {
+
+
+    POST,
+    GET,
+    PATCH,
+    DELETE,
+    PUT;
+
+
+    private RestType(){
+
+    }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////
+
+
+package utils;
+
+
+
+import org.testng.Assert;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
+import java.util.logging.Logger;
+
+
+public class SystemPropertiesManager {
+
+    private static final Logger LOGGER  = Logger.getLogger(String.valueOf(SystemPropertiesManager.class));
+    private static Properties properties = System.getProperties();
+    public static final String SYSTEM_PROPERTY_DEFAULT_APPLICATION = "defaultApplication";
+    public static final String SYSTEM_PROPERTY_FORMAT_DEFAULT_BASEURI = "%s.service.baseUri";
+    public static final String SYSTEM_PROPERTY_FORMAT_BASEURI = "%s.service.%s.baseUri";
+    public static final String SYSTEM_PROPERTY_FORMAT_MSBASEURL= "%s.service.%s.msBaseUrl";
+
+    public SystemPropertiesManager(){
+
+
+    }
+
+    public static void setProperty(String key,String value){
+        LOGGER.info(String.format("Set system propert: %s=%s",key,value));
+        System.setProperty(key,value);
+    }
+
+    public static String getBaseUri(String applicationName, String serviceName , String requestType, String basePath) {
+        LOGGER.info("getBaseUri: " + applicationName + " " + serviceName + " " + requestType + "." + requestType + basePath);
+        String baseUri = null;
+        List<String> baseUriPropertyNames = new ArrayList();
+        baseUriPropertyNames.add(String.format("%s.service.%s.baseUri", applicationName, serviceName + "." + requestType + basePath));
+        baseUriPropertyNames.add(String.format("%s.service.%s.baseUri", applicationName, serviceName));
+        baseUriPropertyNames.add(String.format("%s.service.baseUri", applicationName));
+        baseUriPropertyNames.add(String.format("%s.service.%s.baseUri", getDefaultApplication(), serviceName));
+        baseUriPropertyNames.add(String.format("%s.service.%s.baseUri" , getDefaultApplication()));
+
+        for (int i = 0; i < baseUriPropertyNames.size(); ++i) {
+
+            if (properties.getProperty((String) baseUriPropertyNames.get(i)) != null) {
+                baseUri = properties.getProperty((String) baseUriPropertyNames.get(i));
+            }
+        }
+
+        List<String> baseUriPropertyNamesXML = new ArrayList();
+        baseUriPropertyNamesXML.add(String.format("%s.service.%s.baseUri", "xml.", applicationName, serviceName + "." + requestType + basePath));
+        baseUriPropertyNamesXML.add(String.format("%s.service.%s.baseUri", "xml.", applicationName, serviceName));
+        baseUriPropertyNamesXML.add(String.format("%s.service.%s.baseUri", "xml.", applicationName));
+        baseUriPropertyNamesXML.add(String.format("%s.service.%s.baseUri", "xml.", getDefaultApplication() , serviceName));
+        baseUriPropertyNamesXML.add(String.format("%s.service.%s.baseUri", "xml.", getDefaultApplication()));
+
+        for (int i = 0; i < baseUriPropertyNamesXML.size(); ++i) {
+
+            //   if(properties.getProperty((String)baseUriPropertyNamesXML.get(i)) != null && properties.getProperty(baseUriPropertyNamesXML.get(i).startsWith("{{") && properties.getProperty(baseUriPropertyNamesXML.get(i).endsWith("}}"));
+            String param = properties.getProperty((String) baseUriPropertyNamesXML.get(i)).replace("{{", "").replace("}}", "").replace("xml.", "");
+            baseUri = properties.getProperty(param);
+            break;
+        }
+        Assert.assertNotNull(baseUri ,"System properties: " + Arrays.toString(baseUriPropertyNames.toArray())+ "were not set.");
+        LOGGER.info("getBaseUri value: "  + baseUri);
+        return  baseUri;
+
+    }
+
+
+
+
+    public static String getMsBaseUrl(String applicationName , String serviceName , String defaultMsBaseUrl){
+
+        LOGGER.info("getMsBaseUrl: " + applicationName + " " + serviceName);
+        String propertyName = String.format("%s.service.%s.msBaseUrl",applicationName,serviceName);
+        return getProperty(propertyName, defaultMsBaseUrl);
+
+    }
+
+    public static boolean isPropertyExist(String propertyName){
+        LOGGER.info("isropertyExist: " + propertyName);
+        return properties.containsKey(propertyName);
+    }
+
+    public static void assertPropertyExist(String propertyName){
+        LOGGER.info("assertPropertyExist: " + propertyName);
+        Assert.assertTrue(properties.containsKey(propertyName) , "Assert system property exist: "+ propertyName);
+
+    }
+
+    public static String getDefaultApplication(){
+
+        String propertyValue = properties.getProperty("defaultApplication");
+        LOGGER.info("getDefaultAPplication: " + propertyValue);
+        return  propertyValue;
+    }
+
+    public static String getProperty(String propertyName) {
+
+        LOGGER.info("getPropert: " + propertyName);
+        assertPropertyExist(propertyName);
+        return  properties.getProperty(propertyName);
+    }
+
+    public static String getProperty(String propertyName , String defaultValue) {
+        LOGGER.info("getProperty (with default value): " + propertyName);
+        if (isPropertyExist(propertyName)) {
+
+            String propertyValue = properties.getProperty(propertyName);
+            LOGGER.info("Returning value: " + propertyValue);
+            return propertyValue;
+        } else {
+
+            LOGGER.info("Returning default value: " + defaultValue);
+            return defaultValue;
+
+        }
+    }
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+
